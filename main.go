@@ -177,7 +177,10 @@ var serveCmd = &cobra.Command{
 			log.Printf("- Database: SQLite (%s)", serveDBPath)
 		}
 
-		log.Printf("Server listening on localhost:%s...", servePort)
+		log.Printf("Opening web browser...")
+		launchBrowser(fmt.Sprintf("http://localhost:%s", servePort))
+
+		log.Printf("Server listening on http://localhost:%s...", servePort)
 		if err := http.ListenAndServe("127.0.0.1:"+servePort, xmluibackend.CORSMiddleware(mux)); err != nil {
 			log.Fatal(err)
 		}
