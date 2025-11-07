@@ -1,13 +1,16 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"fmt"
+	"io"
 	"log"
-	"os"
-	"os/exec"
-
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -58,6 +61,57 @@ func injectPgPort(pgConnStr, pgPort string) string {
 		return re.ReplaceAllString(pgConnStr, "port="+pgPort)
 	}
 	return pgConnStr + " port=" + pgPort
+}
+
+func downloadAndExtractZip(url, dest string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	r, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		return err
+	}
+
+	for _, f := range r.File {
+		fpath := filepath.Join(dest, f.Name)
+
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, os.ModePerm)
+			continue
+		}
+
+		if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func main() {
@@ -119,8 +173,31 @@ Available templates:
 		switch template {
 		case "xmlui-invoice":
 			fmt.Println("Scaffolding xmlui-invoice project...")
+
+			zipURL := "https://github.com/xmlui-org/xmlui-invoice/archive/refs/heads/hajagosnorbert/demo.zip"
+			targetDir := "xmlui-invoice"
+
+			if _, err := os.Stat(targetDir); err == nil {
+				log.Fatalf("Directory %s already exists", targetDir)
+			}
+
+			fmt.Println("Downloading and extracting xmlui-invoice...")
+			if err := downloadAndExtractZip(zipURL, "."); err != nil {
+				log.Fatalf("Failed to download and extract: %v", err)
+			}
+
+			extractedDir := "xmlui-invoice-hajagosnorbert-demo"
+			if err := os.Rename(extractedDir, targetDir); err != nil {
+				log.Fatalf("Failed to rename directory: %v", err)
+			}
+
+			fmt.Println("\nScaffolding complete!")
+			fmt.Printf("Project created in: %s\n", targetDir)
+			fmt.Println("\nNavigate and start the project by running:\n")
+			fmt.Printf("  cd %s && xmlui serve\n", targetDir)
+
 		case "hello-world":
-			fmt.Println("Scaffolding hello-world project...")
+			fmt.Println("Scaffolding hello-world not yet implemented")
 		default:
 			fmt.Printf("Error: unknown template %q\n", template)
 			fmt.Println("Available templates:")
