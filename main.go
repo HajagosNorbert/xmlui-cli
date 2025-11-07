@@ -132,8 +132,9 @@ Available templates:
 }
 
 var serveCmd = &cobra.Command{
-	Use:   "serve",
+	Use:   "serve [client-dir]",
 	Short: "Starts the XMLUI server",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		log.SetFlags(log.Lshortfile | log.LstdFlags)
 		log.Println("Server starting...")
@@ -143,6 +144,11 @@ var serveCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		log.Printf("Working directory: %s", pwd)
+
+		clientDir := "client"
+		if len(args) > 0 {
+			clientDir = args[0]
+		}
 
 		showResponsesEnabled := serveShowResponses
 		finalPgConnStr := injectPgPort(servePgConnStr, servePgPort)
@@ -162,14 +168,14 @@ var serveCmd = &cobra.Command{
 		defer server.Close()
 
 		mux := http.NewServeMux()
-		server.SetupRoutes(mux, serveClientDir)
+		server.SetupRoutes(mux, clientDir)
 
 		log.Printf("Server configuration:")
 		log.Printf("- Port: %s", servePort)
 		log.Printf("- API Description: %s", serveAPIDesc)
 		log.Printf("- Extension: %s", serveExtension)
 		log.Printf("- Show Responses: %v", showResponsesEnabled)
-		log.Printf("- Client Directory: %s", serveClientDir)
+		log.Printf("- Client Directory: %s", clientDir)
 		if servePgConnStr != "" {
 			log.Printf("- Database: PostgreSQL")
 		} else {
@@ -200,7 +206,6 @@ var (
 	serveShowResponses bool
 	servePgConnStr    string
 	servePgPort       string
-	serveClientDir    string
 )
 
 func init() {
@@ -213,13 +218,12 @@ func init() {
 	serveCmd.Flags().StringVar(&servePort, "port", "8080", "Port to run the server on")
 	serveCmd.Flags().StringVarP(&servePort, "p", "p", "8080", "Port to run the server on (shorthand)")
 	serveCmd.Flags().StringVar(&serveExtension, "extension", "", "Path to SQLite extension to load")
-	serveCmd.Flags().StringVar(&serveAPIDesc, "api", "", "Path to API description file")
+	serveCmd.Flags().StringVar(&serveAPIDesc, "api", "api.json", "Path to API description file")
 	serveCmd.Flags().StringVar(&serveDBPath, "db", "data.db", "Path to SQLite database file")
 	serveCmd.Flags().BoolVar(&serveShowResponses, "show-responses", false, "Enable logging of SQL query responses")
 	serveCmd.Flags().BoolVarP(&serveShowResponses, "s", "s", false, "Enable logging of SQL query responses (shorthand)")
 	serveCmd.Flags().StringVar(&servePgConnStr, "pg-conn", "", "PostgreSQL connection string")
 	serveCmd.Flags().StringVar(&servePgPort, "pg-port", "", "PostgreSQL port (overrides port in --pg-conn)")
-	serveCmd.Flags().StringVar(&serveClientDir, "client", "client", "Directory containing client files (SPA)")
 
 	rootCmd.AddCommand(mcpCmd)
 	rootCmd.AddCommand(scaffoldCmd)
