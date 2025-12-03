@@ -117,7 +117,6 @@ func downloadAndExtractZip(url, dest string) error {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
 		os.Exit(1)
 	}
 }
@@ -134,20 +133,17 @@ var mcpCmd = &cobra.Command{
 
 		// Configure the XMLUI MCP server
 		config := xmluimcp.ServerConfig{
-			ExampleDirs:   mcpExampleDirs,
-			HTTPMode:      mcpHTTPMode,
-			Port:          mcpPort,
-			AnalyticsFile: mcpAnalyticsFile,
+			ExampleDirs: mcpExampleDirs,
+			HTTPMode:    mcpHTTPMode,
+			Port:        mcpPort,
 		}
 
-		// Create the server instance using the local library
+		fmt.Fprintf(os.Stderr, "Initializing MCP server...")
 		server, err := xmluimcp.NewServer(config)
 		if err != nil {
 			log.Fatalf("Failed to create XMLUI MCP server: %v", err)
 		}
-
-		server.PrintStartupInfo()
-
+		fmt.Fprintf(os.Stderr, "Done!\n")
 		if mcpHTTPMode {
 			if err := server.ServeHTTP(); err != nil {
 				log.Fatalf("Server error: %v", err)
@@ -225,7 +221,7 @@ var serveCmd = &cobra.Command{
 		}
 		log.Printf("Working directory: %s", pwd)
 
-		clientDir := "client"
+		clientDir := pwd
 		if len(args) > 0 {
 			clientDir = args[0]
 		}
@@ -255,11 +251,10 @@ var serveCmd = &cobra.Command{
 		log.Printf("- API Description: %s", serveAPIDesc)
 		log.Printf("- Extension: %s", serveExtension)
 		log.Printf("- Show Responses: %v", showResponsesEnabled)
-		log.Printf("- Client Directory: %s", clientDir)
+		log.Printf("- Serving Directory: %s", clientDir)
 		if servePgConnStr != "" {
 			log.Printf("- Database: PostgreSQL")
 		} else {
-			os.Setenv("STEAMPIPE_CACHE", "false")
 			log.Printf("- Database: SQLite (%s)", serveDBPath)
 		}
 
@@ -274,10 +269,9 @@ var serveCmd = &cobra.Command{
 }
 
 var (
-	mcpExampleDirs   []string
-	mcpPort          string
-	mcpAnalyticsFile string
-	mcpHTTPMode      bool
+	mcpExampleDirs []string
+	mcpPort        string
+	mcpHTTPMode    bool
 
 	servePort          string
 	serveExtension     string
@@ -293,7 +287,6 @@ func init() {
 	mcpCmd.Flags().StringSliceVarP(&mcpExampleDirs, "example", "e", []string{}, "`<path>` to example directory (option can be repeated)")
 
 	mcpCmd.Flags().StringVarP(&mcpPort, "port", "p", "9090", "`<port>` to run the HTTP server on")
-	mcpCmd.Flags().StringVar(&mcpAnalyticsFile, "analytics-file", "./mcp-analytics.json", "`<path>` to analytics file")
 	mcpCmd.Flags().BoolVar(&mcpHTTPMode, "http", false, "Run as HTTP server")
 
 	// Test server
