@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -133,14 +134,19 @@ var mcpCmd = &cobra.Command{
 
 		// Configure the XMLUI MCP server
 		config := xmluimcp.ServerConfig{
-			ExampleDirs: mcpExampleDirs,
-			HTTPMode:    mcpHTTPMode,
-			Port:        mcpPort,
+			ExampleDirs:  mcpExampleDirs,
+			HTTPMode:     mcpHTTPMode,
+			Port:         mcpPort,
+			XMLUIVersion: mcpXMLUIVersion,
 		}
 
 		fmt.Fprintf(os.Stderr, "Initializing MCP server...")
 		server, err := xmluimcp.NewServer(config)
 		if err != nil {
+			if errors.Is(err, xmluimcp.ErrVersionNotFound) && mcpXMLUIVersion != "" {
+				fmt.Fprintf(os.Stderr, "\nError: The specified XMLUI version '%s' was not found.\nPlease check if it is a valid version.\n", mcpXMLUIVersion)
+				os.Exit(1)
+			}
 			log.Fatalf("Failed to create XMLUI MCP server: %v", err)
 		}
 		fmt.Fprintf(os.Stderr, "Done!\n")
@@ -269,9 +275,10 @@ var serveCmd = &cobra.Command{
 }
 
 var (
-	mcpExampleDirs []string
-	mcpPort        string
-	mcpHTTPMode    bool
+	mcpExampleDirs  []string
+	mcpPort         string
+	mcpHTTPMode     bool
+	mcpXMLUIVersion string
 
 	servePort          string
 	serveExtension     string
@@ -288,6 +295,7 @@ func init() {
 
 	mcpCmd.Flags().StringVarP(&mcpPort, "port", "p", "9090", "`<port>` to run the HTTP server on")
 	mcpCmd.Flags().BoolVar(&mcpHTTPMode, "http", false, "Run as HTTP server")
+	mcpCmd.Flags().StringVar(&mcpXMLUIVersion, "xmlui-version", "", "Specific XMLUI `<version>` to use for documentation (e.g. 0.11.4)")
 
 	// Test server
 	serveCmd.Flags().StringVarP(&servePort, "port", "p", "8080", "`<port>` to run the HTTP server on")
