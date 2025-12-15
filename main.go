@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -16,6 +18,34 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+func getStartScript(clientDir string) (startScriptPath string, err error) {
+	ensureRelative := func(p string) string {
+		if !filepath.IsAbs(p) && !strings.HasPrefix(p, "."+string(os.PathSeparator)) && !strings.HasPrefix(p, ".."+string(os.PathSeparator)) {
+			return "." + string(os.PathSeparator) + p
+		}
+		return p
+	}
+
+	if runtime.GOOS == "windows" {
+		powShellScript := filepath.Join(clientDir, "start.ps1")
+		if info, err := os.Stat(powShellScript); err == nil && !info.IsDir() {
+			return ensureRelative(powShellScript), nil
+		}
+
+		batchScript := filepath.Join(clientDir, "start.bat")
+		if info, err := os.Stat(batchScript); err == nil && !info.IsDir() {
+			return ensureRelative(batchScript), nil
+		}
+	} else {
+		shScript := filepath.Join(clientDir, "start.sh")
+		if info, err := os.Stat(shScript); err == nil && !info.IsDir() {
+			return ensureRelative(shScript), nil
+		}
+	}
+
+	return "", errors.New("no start script found")
+}
 
 func unzip(src, dest string) error {
 	r, err := zip.OpenReader(src)
@@ -111,8 +141,11 @@ var mcpCmd = &cobra.Command{
 var runCmd = &cobra.Command{
 	Use:   "run [dir]",
 	Short: "Runs the XMLUI server",
-	Long:  "Runs the XMLUI server at the current working directory, or at the directory specified by the first argument. If the first argument is a zip file, it will extract the contents next to it and run in that directory.",
-	Args:  cobra.MaximumNArgs(1),
+	Long: `Runs the XMLUI server at the current working directory, or at the directory specified by the first argument.
+If the first argument is a zip file, it will extract the contents next to it and run in that directory.
+If the directory contains a start.sh, start.ps1 or start.bat file,
+it will run that, instead of starting the server`,
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clientDir := ""
 		if len(args) > 0 {
@@ -153,6 +186,24 @@ var runCmd = &cobra.Command{
 				log.Fatalf("Failed to extract zip file: %v", err)
 			}
 			clientDir = targetDir
+		}
+
+		// Run a start script instead of the server if the directory has one
+		if startScriptPath, err := getStartScript(clientDir); err == nil {
+			fmt.Printf("Executing found start script at: %s\n", startScriptPath)
+			cmd := exec.Command(startScriptPath)
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				var exitErr *exec.ExitError
+				if errors.As(err, &exitErr) {
+					os.Exit(exitErr.ExitCode())
+				}
+				fmt.Printf("Failed to execute start script: %v", err)
+				os.Exit(1)
+			}
+			return
 		}
 
 		config := server.Config{
